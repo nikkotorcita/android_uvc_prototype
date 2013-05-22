@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">UVC Camera</string>
+    <string name="action_settings">Settings</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="camera_switch">SCAN DEVICE</string>
+    <string name="camera_status">No UVC camera detected</string>
+    <string name="start">START</string>
+    <string name="stop">STOP</string>
+
+</resources>

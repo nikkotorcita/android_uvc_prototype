@@ -157,7 +157,8 @@ class CameraDevice {
 		
 		mCameraControls.setDefault();
 		
-		mCameraControls.setFrameIndex(UvcConstants.VGA);
+		//mCameraControls.setFrameIndex(UvcConstants.VGA);
+		mCameraControls.setFormatIndex(2);
 		
 		if(!mCameraControls.probeControl(UvcConstants.SET_CUR)) {
 			Log.e(TAG, "error in probe control [SET_CUR]");
@@ -179,7 +180,8 @@ class CameraDevice {
 		public boolean mStop = false;
 		int cnt = 0;
 		ByteArrayBuffer rawBuf = new ByteArrayBuffer(IMAGE_BUFFER_SIZE);
-		byte[] frameBuf = new byte[IMAGE_BUFFER_SIZE];
+//		byte[] frameBuf = new byte[IMAGE_BUFFER_SIZE];
+		byte[] frameBuf = null;
 		byte[] epBuf = new byte[UvcConstants.BULK_TRANSFER_SIZE];
 	
 		public void run() {
@@ -200,11 +202,16 @@ class CameraDevice {
 					cnt = mDeviceConnection.bulkTransfer(mBulkEpIn, epBuf, UvcConstants.BULK_TRANSFER_SIZE, 0);
 					if(epBuf[0] == UvcConstants.PAYLOAD_HEADER_LENGTH && 
 							(epBuf[1] == UvcConstants.PAYLOAD_HEADER_0 || epBuf[1] == UvcConstants.PAYLOAD_HEADER_1)) {
-						System.arraycopy(rawBuf.buffer(), 0, frameBuf, 0, IMAGE_BUFFER_SIZE);
-						try {
-							frameBufferQueue.put(frameBuf);
-						} catch (InterruptedException e) {
-							e.printStackTrace();
+//						System.arraycopy(rawBuf.buffer(), 0, frameBuf, 0, IMAGE_BUFFER_SIZE);
+						frameBuf = insertHuffman(rawBuf.buffer());
+						if(frameBuf != null) {
+							try {
+								frameBufferQueue.put(frameBuf);
+//								frameBufferQueue.put(rawBuf.toByteArray());
+							
+							} catch (InterruptedException e) {
+								e.printStackTrace();
+							}
 						}
 						rawBuf.clear();
 						break;
@@ -218,10 +225,12 @@ class CameraDevice {
 	}
 	
 	private class RenderingView extends SurfaceView implements Runnable {
+		int i = 0;
 		Thread renderer = null;
 		SurfaceHolder surfaceHolder;
 		Canvas canvas;
 		byte[] yuvData = new byte[IMAGE_BUFFER_SIZE];
+		byte[] jpegData;
 		YuvImage yuvImage;
 		Bitmap bitmap;
 		ByteArrayOutputStream imgStream = new ByteArrayOutputStream();
@@ -261,12 +270,16 @@ class CameraDevice {
 		public void run() {
 			while(running) {
 				try {
-					yuvData = frameBufferQueue.take();
-					yuvImage = new YuvImage(yuvData, ImageFormat.YUY2, IMAGE_WIDTH, IMAGE_HEIGHT, null);
-					yuvImage.compressToJpeg(rect, 50, imgStream);
-					bitmap = BitmapFactory.decodeByteArray(imgStream.toByteArray(), 0, imgStream.toByteArray().length);
-					imgStream.reset();
-				} catch (InterruptedException e) {
+					jpegData = frameBufferQueue.take();
+					Log.v(TAG, "hdr = " + Integer.toHexString(jpegData[0]) + " " + Integer.toHexString(jpegData[1]));
+//					yuvData = frameBufferQueue.take();
+//					yuvImage = new YuvImage(yuvData, ImageFormat.YUY2, IMAGE_WIDTH, IMAGE_HEIGHT, null);
+//					yuvImage.compressToJpeg(rect, 50, imgStream);
+//					bitmap = BitmapFactory.decodeByteArray(imgStream.toByteArray(), 0, imgStream.toByteArray().length);
+					bitmap = BitmapFactory.decodeByteArray(jpegData, 0, jpegData.length);
+					}
+//					imgStream.reset();
+					catch (InterruptedException e) {
 					e.printStackTrace();
 				}
 				
@@ -278,5 +291,25 @@ class CameraDevice {
 				}
 			}
 		}
+	}
+	
+	private byte[] insertHuffman(byte[] mJpegData) {
+		byte[] jpegData;
+		int index = 0;
+		for(int i = 0; i < mJpegData.length - 1; i++) {
+			if(mJpegData[i] == (byte) 0xff && mJpegData[i + 1] == (byte) 0xda) {
+				index = i;
+			}
+		}
+		
+		if(index > 0) {
+			jpegData = new byte[UvcConstants.HUFFMAN_TABLE.length + mJpegData.length];
+			System.arraycopy(mJpegData, 0, jpegData, 0, index);
+			System.arraycopy(UvcConstants.HUFFMAN_TABLE, 0, jpegData, index, UvcConstants.HUFFMAN_TABLE.length);
+			System.arraycopy(mJpegData, index, jpegData, UvcConstants.HUFFMAN_TABLE.length + index, mJpegData.length - index);
+			return jpegData;
+		}
+		Log.v(TAG, "index is < 0");
+		return null;
 	}
 }

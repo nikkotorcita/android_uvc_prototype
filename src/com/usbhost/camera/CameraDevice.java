@@ -104,6 +104,7 @@ class CameraDevice {
 			}
 			
 			else {
+				Log.v(TAG, "streaming interface is null");
 				mDevice = null;
 			}
 		}
@@ -113,7 +114,13 @@ class CameraDevice {
 	public boolean connectToDevice() {
 		if(mManager.hasPermission(mDevice)) {
 			mDeviceConnection = mManager.openDevice(mDevice);
+			if(mDeviceConnection == null) {
+				Log.v(TAG, "cannot open usb device");
+				return false;
+			}
+			
 			if(!mDeviceConnection.claimInterface(mStreamingIntf, false)) {
+				Log.v(TAG, "failed to claim streaming interface");
 				return false;
 			}
 			mCameraControls = new CameraControls(mDeviceConnection);
@@ -123,6 +130,8 @@ class CameraDevice {
 			isStreaming = true;
 			return true;
 		}
+		
+		Log.v(TAG, "permission denied to access usb device");
 		return false;
 	}
 	
